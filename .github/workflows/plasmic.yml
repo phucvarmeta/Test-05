@@ -1,0 +1,121 @@
+# Plasmic workflow v4
+name: Sync, build and deploy SuiNova app
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  repository_dispatch:
+    types: [plasmic]
+
+jobs:
+  job:
+    name: Sync, build and deploy
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout
+        name: Checking out repository...
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: node
+        name: Setting up node v18...
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+      - id: init
+        name: Initializing SuiNova app...
+        uses: phucvarmeta/plasmic-action@master
+        with:
+          run: init
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.event.client_payload.data.branch }}
+          directory: ${{ github.event.client_payload.data.directory }}
+          project_id: ${{ github.event.client_payload.data.projectId }}
+          project_api_token: ${{ github.event.client_payload.data.projectApiToken }}
+          platform: ${{ github.event.client_payload.data.platform }}
+          language: ${{ github.event.client_payload.data.language }}
+          scheme: ${{ github.event.client_payload.data.scheme }}
+          title: ${{ github.event.client_payload.data.title }}
+          description: ${{ github.event.client_payload.data.description }}
+      - id: sync
+        name: Syncing SuiNova project...
+        if: ${{ github.event.client_payload.data.scheme == 'codegen' && steps.init.outputs.synced != 'true' }}
+        uses: phucvarmeta/plasmic-action@master
+        with:
+          run: sync
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.event.client_payload.data.branch }}
+          directory: ${{ github.event.client_payload.data.directory }}
+          project_id: ${{ github.event.client_payload.data.projectId }}
+          project_api_token: ${{ github.event.client_payload.data.projectApiToken }}
+          sync_action: ${{ github.event.client_payload.data.syncAction }}
+          title: ${{ github.event.client_payload.data.title }}
+          description: ${{ github.event.client_payload.data.description }}
+      - id: build
+        name: Building SuiNova app...
+        if: ${{ github.event.client_payload.data.publish }}
+        uses: phucvarmeta/plasmic-action@master
+        with:
+          run: build
+          branch: ${{ github.event.client_payload.data.branch }}
+          directory: ${{ github.event.client_payload.data.directory }}
+          platform: ${{ github.event.client_payload.data.platform }}
+      - id: pr
+        name: Creating pull request...
+        uses: repo-sync/pull-request@v2
+        if: ${{ steps.sync.outputs.new_branch }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          source_branch: ${{ steps.sync.outputs.new_branch }}
+          destination_branch: ${{ github.event.client_payload.data.branch }}
+      - id: vite-build
+        name: Building Vite app...
+        run: |
+          cd ${{ github.event.client_payload.data.directory || '.' }}
+          npm run build
+
+      - id: cache
+        name: Recovering cache...
+        uses: actions/cache@v4
+        with:
+          key: lock-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}
+          path: ${{ github.event.client_payload.data.directory || '.' }}/node_modules
+
+      - id: generate-config
+        name: Generate Walrus site configuration
+        run: |
+          cat > site.config.json << EOF
+          {
+            "network": "testnet",
+            "owner": "0x7c484896d088f2eb3012cac48de62fd4ec02c54540cbb1cd5e312e02216d055a",
+            "site_name": "sui-nova",
+            "metadata": {
+              "link": "https://sui-nova.wal.app",
+              "image_url": "https://myproject.xyz/preview.png",
+              "name": "My Project",
+              "description": "A decentralized web app deployed on Walrus.",
+              "project_url": "https://github.com/my-org/my-walrus-site",
+              "creator": "my-org"
+            },
+            "epochs": 5,
+            "path": "./dist",
+            "gas_budget": 100000000,
+            "write_retry_limit": 3,
+            "object_id": ""
+          }
+          EOF
+
+          echo "Generated site.config.json:"
+          cat site.config.json
+
+      - id: deploy
+        name: Deploy to Walrus Sites
+        uses: hungd19/walrus-sites-provenance@main
+        with:
+          config-path: "./site.config.json"
+        env:
+          ED25519_PRIVATE_KEY: "suiprivkey1qznd5vzusmcyfjync805mm6f8t3qz0jfayhrm5zkv3pr2d9p74qfqtl37ah"
+          PROJECT_ID: ${{ github.event.client_payload.data.projectId }}
