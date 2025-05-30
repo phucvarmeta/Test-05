@@ -1,0 +1,53 @@
+.root {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  background: #ffffff;
+  position: relative;
+  padding: 20px 80px;
+  border-bottom: 1px solid #000000;
+}
+@media (max-width: 660px) {
+  .root {
+    padding: 20px;
+  }
+}
+.freeBox {
+  display: flex;
+  flex-direction: row;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+.freeBox > :global(.__wab_flex-container) {
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  min-width: 0;
+  margin-left: calc(0px - 8px);
+  width: calc(100% + 8px);
+}
+.freeBox > :global(.__wab_flex-container) > *,
+.freeBox > :global(.__wab_flex-container) > :global(.__wab_slot) > *,
+.freeBox > :global(.__wab_flex-container) > picture > img,
+.freeBox
+  > :global(.__wab_flex-container)
+  > :global(.__wab_slot)
+  > picture
+  > img {
+  margin-left: 8px;
+}
+.svg {
+  object-fit: cover;
+  max-width: 100%;
+  width: 24px;
+  height: 24px;
+  color: #27273a;
+  flex-shrink: 0;
+}
+.text {
+  position: relative;
+  font-size: 22px;
+  font-weight: 700;
+  color: #27273a;
+}
